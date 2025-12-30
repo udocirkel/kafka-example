@@ -8,13 +8,13 @@ It shows how messages can be sent from a REST endpoint to a Kafka topic and cons
 ## 📦 Project Structure
 
 ```
-├── demo/               # Example services using Kafka
+├── demo/               # Example service using Kafka
 │
 ├── pom.xml             # Maven build for demo service and container image
 │
 ├── docker-compose.yml  # Full local environment (Kafka + service)
 ├── start.sh            # Start full local environment
-├── stop.sh             # Stop full local environment
+└── stop.sh             # Stop full local environment
 ```
 
 ---
@@ -51,6 +51,22 @@ mvn clean verify
 ```bash
 ./start.sh
 ```
+
+### **Play demo**
+
+Send messages to `demo-topic`
+```bash
+curl -X POST 'http://localhost:8087/api/messages' -H 'Content-Type: text/plain' -d 'Hallo Kafka!'
+```
+
+Read messages from `demo-topic`  
+* Query parameter `offset` (required): start reading from this message offset
+* Query parameter `limit` (optional): maximum number of messages to read
+```bash
+curl 'http://localhost:8087/api/messages?offset=5&limit=3'
+```
+
+View Kafka configuration and topic data via the [Kafka Console (AKHQ)](http://localhost:8081)
 
 ### **Stop environment**
 
