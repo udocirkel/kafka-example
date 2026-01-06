@@ -2,17 +2,14 @@ networks:
   example:
     driver: bridge
 
-volumes:
-  kafka_data:
-
 services:
 
   # Kafka Console (AKHQ) => http://localhost:8081
   # Demo Service         => http://localhost:8087
 
-  #######################################
-  ###  MESSAGE STREAMING SERVER + UI  ###
-  #######################################
+  ######################
+  ###  Kafka Broker  ###
+  ######################
 
   kafka:
     image: apache/kafka:4.1.1
@@ -41,13 +38,17 @@ services:
       retries: 12
       start_period: 30s
     volumes:
-      - ./data/kafka_data:/var/lib/kafka/data
+      - ./data/simple_demo/kafka:/var/lib/kafka/data
     ports:
       - "9092:9092"
     networks: [example]
 
+  ##############################
+  ###  Kafka Console (AKHQ)  ###
+  ##############################
+
   akhq:
-    image: tchiotludo/akhq
+    image: tchiotludo/akhq:0.26.0
     restart: always
     environment:
       AKHQ_CONFIGURATION: |
@@ -61,7 +62,7 @@ services:
     networks: [example]
 
   #######################
-  ###  DEMO SERVICES  ###
+  ###  Demo Services  ###
   #######################
 
   demo-service:

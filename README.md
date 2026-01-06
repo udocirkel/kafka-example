@@ -52,14 +52,6 @@ mvn clean verify
 ./start.sh
 ```
 
-### **Play demo**
-
-Try out the Kafka producer & consumer demo in action using the HTTP REST API.
-A `.http` file is included in the `http-test` folder with example requests.
-Open it in a compatible editor (e.g., IntelliJ IDEA), select the `demo` environment and run the requests to produce and consume messages.
-
-View Kafka configuration and topic data via the [Kafka Console (AKHQ)](http://localhost:8081).
-
 ### **Stop environment**
 
 ```bash
@@ -74,6 +66,24 @@ View Kafka configuration and topic data via the [Kafka Console (AKHQ)](http://lo
 |--------------------------|-----------------------|
 | **Kafka Console (AKHQ)** | http://localhost:8081 |
 | **Demo Service**         | http://localhost:8087 |
+
+---
+
+## 🧪 Test the Integration
+
+The project includes a ready-to-use HTTP test script located at:
+
+```bash
+http-test/kafka-check.http
+```
+
+This script can be executed with an HTTP client that supports `.http` files, such as the built-in HTTP client in
+IntelliJ IDEA or VS Code (REST Client extension).
+Open the file in your editor and execute the requests.
+
+The test script shows the Kafka producer & consumer demo in action.
+
+View the Kafka configuration and topic data via the [Kafka Console (AKHQ)](http://localhost:8081).
 
 ---
 
