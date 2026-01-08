@@ -88,13 +88,13 @@ mvn clean verify
 ### **Start full environment**
 
 ```bash
-./startdev.sh
+./start.sh
 ```
 
 ### **Stop environment**
 
 ```bash
-./stopdev.sh
+./stop.sh
 ```
 
 ---
