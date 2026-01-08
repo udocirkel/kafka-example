@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -24,12 +25,13 @@ public class MessageController {
 
     private final MessageReader reader;
 
-    @Value("${app.topic}")
+    @Value("${app.topic.name}")
     private String topic;
 
     @PostMapping(
             produces = TEXT_PLAIN_VALUE,
             consumes = TEXT_PLAIN_VALUE)
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public String send(@RequestBody String message) {
         LOG.debug("Sending message to topic '{}': {}", topic, message);
         producer.send(topic, message);
@@ -39,10 +41,11 @@ public class MessageController {
     @GetMapping(
             produces = APPLICATION_JSON_VALUE)
     public List<MessageRecord> readFromOffset(
+            @RequestParam(name = "partition") int partition,
             @RequestParam(name = "offset") long offset,
             @RequestParam(name = "limit", defaultValue = "100") int limit) {
         LOG.debug("Reading messages from topic '{}' with offset {} and limit {}", topic, offset, limit);
-        return reader.readFromOffset(topic, offset, limit);
+        return reader.readFromOffset(topic, partition, offset, limit);
     }
 
 }

@@ -1,0 +1,85 @@
+networks:
+  demo:
+    driver: bridge
+
+services:
+
+  # Kafka Console (AKHQ) => http://localhost:8081
+  # Demo Service         => http://localhost:8087
+
+  ######################
+  ###  Kafka Broker  ###
+  ######################
+
+  kafka:
+    image: apache/kafka:4.1.1
+    restart: always
+    environment:
+      # Broker identity
+      KAFKA_NODE_ID: 1
+      # Broker KRaft mode (no ZooKeeper)
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      # Broker connectivity
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      # Controller listener
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      # Listener security
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      # Internal __consumer_offsets topic (single-broker setup)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_OFFSETS_TOPIC_MIN_ISR: 1
+      # Internal __transaction_state topic (single-broker setup)
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Kafka data directory
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      # Logging configuration
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=DEBUG,state.change.logger=DEBUG"
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    volumes:
+      - ./data/simple_demo/kafka:/var/lib/kafka/data
+    networks: [ demo ]
+
+  ##############################
+  ###  Kafka Console (AKHQ)  ###
+  ##############################
+
+  akhq:
+    image: tchiotludo/akhq:0.26.0
+    depends_on:
+      - kafka
+    restart: always
+    environment:
+      AKHQ_CONFIGURATION: |
+        akhq:
+          connections:
+            kafka:
+              properties:
+                bootstrap.servers: "kafka:9092"
+    ports:
+      - "8081:8080"
+    networks: [ demo ]
+
+  #######################
+  ###  Demo Services  ###
+  #######################
+
+  demo-service:
+    image: udocirkel/kafka-example/demo-service:1.0.0
+    restart: always
+    depends_on:
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      LOG_LEVEL: DEBUG
+    ports:
+      - "8087:8080"
+    networks: [ demo ]

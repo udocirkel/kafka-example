@@ -1,20 +1,59 @@
-# Kafka Example
+# Kafka Geo Example
 
-This repository contains a simple example project demonstrating **Spring Boot** with **Apache Kafka**.
-It shows how messages can be sent from a REST endpoint to a Kafka topic and consumed by a Kafka consumer.
+This repository demonstrates **geo-redundant Kafka clusters** across **two data centers (DC1 and DC2)** with **active-standby replication** for failover.
+Messages can be produced via a REST endpoint to a Kafka topic and consumed by a **Spring Kafka** consumer.
+The demo shows how data is replicated between clusters and how applications behave when brokers or entire clusters are temporarily unavailable.
+
+---
+
+## Features Demonstrated
+
+- Sending messages to a Kafka topic via **REST endpoint** and **Spring Kafka producer**
+- Consuming messages using **Spring Kafka consumer**
+- Configuring **topic replication** and **min in-sync replicas** for fault tolerance and durability
+- Using **transactional producers** with **idempotence** to prevent duplicates
+- Handling **temporary broker failures**, ensuring that producers and consumers continue to operate
+- Handling **failover scenarios** with Active-Standby replication across data centers
+
+---
+
+## Architecture
+
+```
++---------------------+       +---------------------+
+|  Kafka Cluster DC1  |       |  Kafka Cluster DC2  |
+|                     |       |                     |
+|     Datacenter 1    |       |     Datacenter 2    |
+|       (Active)      |       |      (Standby)      |
+|                     |       |                     |
+|     ZooKeeper 1     |       |     ZooKeeper 2     |
+|      Broker 1-3     |       |      Broker 4-6     |
+|                     |       |     MirrorMaker     |
++---------------------+       +---------------------+
+           |                             ^
+           |                             |
+           +-------- Replication --------+
+```
+
+- DC1 is the primary cluster where producers write messages.
+- DC2 is the standby cluster that receives replicated data.
+- In case of failure in DC1, consumers can switch to DC2 to continue processing messages.
 
 ---
 
 ## 📦 Project Structure
 
 ```
-├── demo/               # Example service using Kafka
+├── demo/                   # Demo service using Kafka
 │
-├── pom.xml             # Maven build for demo service and container image
+├── pom.xml                 # Maven build for demo service and container image
 │
-├── docker-compose.yml  # Full local environment (Kafka + service)
-├── start.sh            # Start full local environment
-└── stop.sh             # Stop full local environment
+├── docker-compose.yml      # Full geo-redundant environment (Kafka clusters DC1/DC2 + Mirror Maker + Demo service)
+├── docker-compose-dev.yml  # Single-node Kafka environment (Single Kafka broker + Demo service)
+├── start.sh                # Start full geo-redundant environment
+├── stop.sh                 # Stop full geo-redundant environment
+├── startdev.sh             # Start single-node environment
+└── stopdev.sh              # Stop single-node environment
 ```
 
 ---
@@ -36,8 +75,8 @@ To run this project locally, you need the following installed on your **client m
 ### **Get project from SCM**
 
 ```bash
-git clone https://github.com/udocirkel/kafka-example.git
-cd kafka-example
+git clone https://github.com/udocirkel/kafka-geo-example.git
+cd kafka-geo-example
 ```
 
 ### **Build project**
@@ -49,13 +88,13 @@ mvn clean verify
 ### **Start full environment**
 
 ```bash
-./start.sh
+./startdev.sh
 ```
 
 ### **Stop environment**
 
 ```bash
-./stop.sh
+./stopdev.sh
 ```
 
 ---

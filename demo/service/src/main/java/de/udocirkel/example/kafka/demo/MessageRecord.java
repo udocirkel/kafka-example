@@ -1,3 +1,13 @@
 package de.udocirkel.example.kafka.demo;
 
-public record MessageRecord(long offset, String value) {}
+import java.util.Optional;
+
+public record MessageRecord(
+        String topic,
+        String key,
+        int partition,
+        Optional<Integer> leaderEpoch,
+        long offset,
+        long timestamp,
+        String value) {
+}
