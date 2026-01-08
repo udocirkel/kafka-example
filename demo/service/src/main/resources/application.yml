@@ -1,5 +1,9 @@
 app:
-  topic: demo-topic
+  topic:
+    name: ${APP_TOPIC_NAME:demo-topic}
+    partitions: ${APP_TOPIC_PARTITIONS:#{null}}
+    replicas: ${APP_TOPIC_REPLICATIONS:#{null}}
+    min-insync-replicas: ${APP_TOPIC_MIN_INSYNC_REPLICAS:#{null}}
 
 logging:
   level:
@@ -21,16 +25,26 @@ server:
 
 spring:
   application:
-    name: demo-service
+    name: demo-service                              # Logical name of the Spring Boot application
   kafka:
-    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}    # Initial brokers used to discover the Kafka cluster
+    admin:
+      auto-create: true                             # Allows to create topics from Spring beans, even if broker auto-create is disabled, filling in any unspecified settings from broker defaults
+      fail-fast: true                               # Allows the application to start even if Kafka is not reachable at startup
+    listener:
+      missing-topics-fatal: false                   # Prevents the application from failing if topics do not exist yet
+    producer:
+      acks: all                                     # Wait for all in-sync replicas to acknowledge writes
+      retries: 600                                  # Number of retries for temporary failures (retries for 600x500ms=5m)
+      properties:
+        max.block.ms: 1000                          # Limits how long the producer blocks during startup when Kafka is unavailable
+        retry.backoff.ms: 500                       # Waits 500ms between retries to avoid flooding the broker
+        linger.ms: 10                               # Wait up to 10ms to batch messages for higher throughput
+        enable.idempotence: true                    # Prevents duplicate messages when retries occur, required for exactly-once semantics
+        max.in.flight.requests.per.connection: 5    # Ensures message order when using idempotence
     consumer:
       group-id: demo-group
       auto-offset-reset: earliest
-      allow-auto-create-topics: true
-    producer:
-      acks: all
-      retries: 10
       properties:
-        linger.ms: 5
-        enable.idempotence: true
+        reconnect.backoff.ms: 1000                  # Controls how quickly the consumer retries connecting to Kafka
+        reconnect.backoff.max.ms: 10000             # Limits the maximum delay between reconnect attempts

@@ -11,7 +11,7 @@ public class MessageConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(MessageConsumer.class);
 
-    @KafkaListener(topics = "${app.topic}")
+    @KafkaListener(topics = "${app.topic.name}")
     public void receive(String message) {
         LOG.debug("Received message: '{}'", message);
     }

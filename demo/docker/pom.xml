@@ -35,7 +35,7 @@
                                     <KAFKA_CONTROLLER_QUORUM_VOTERS>1@localhost:9093</KAFKA_CONTROLLER_QUORUM_VOTERS>
                                     <!-- Networking -->
                                     <KAFKA_LISTENERS>PLAINTEXT://:9092,CONTROLLER://:9093</KAFKA_LISTENERS>
-                                    <KAFKA_ADVERTISED_LISTENERS>PLAINTEXT://localhost:9092</KAFKA_ADVERTISED_LISTENERS>
+                                    <KAFKA_ADVERTISED_LISTENERS>PLAINTEXT://kafka:9092</KAFKA_ADVERTISED_LISTENERS>
                                     <KAFKA_CONTROLLER_LISTENER_NAMES>CONTROLLER</KAFKA_CONTROLLER_LISTENER_NAMES>
                                     <KAFKA_LISTENER_SECURITY_PROTOCOL_MAP>CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
                                     </KAFKA_LISTENER_SECURITY_PROTOCOL_MAP>
@@ -79,7 +79,7 @@
                             </build>
                             <run>
                                 <dependsOn>
-                                    <dependsOn>kafka</dependsOn>
+                                    <dependsOn>test-kafka</dependsOn>
                                 </dependsOn>
                                 <ports>
                                     <port>demo.service.port:8080</port>
