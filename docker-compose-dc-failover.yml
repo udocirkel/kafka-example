@@ -13,6 +13,7 @@ networks:
 services:
 
   # Kafka Console (AKHQ) => http://localhost:8081
+  # Demo Service         => http://localhost:8087
 
   #############################################
   ###  Kafka Cluster - Data Center 1 (DC1)  ###
@@ -26,11 +27,11 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
       ZOOKEEPER_SYNC_LIMIT: 2
     healthcheck:
-      test: [ "CMD-SHELL", "echo srvr | nc localhost 2181 | grep Mode" ]
+      test: [ "CMD-SHELL", "echo 'create -e /healthcheck test' | /usr/bin/zookeeper-shell localhost:2181 >/tmp/zk 2>&1 && grep -q Created /tmp/zk && echo 'delete /healthcheck' | /usr/bin/zookeeper-shell localhost:2181 >/dev/null 2>&1" ]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     volumes:
       - ./data/dc_failover_demo/zookeeper_dc1/data:/var/lib/zookeeper/data
       - ./data/dc_failover_demo/zookeeper_dc1/log:/var/lib/zookeeper/log
@@ -42,22 +43,34 @@ services:
     image: confluentinc/cp-kafka:7.8.6
     hostname: kafka1-dc1
     depends_on:
-      - zookeeper-dc1
+      zookeeper-dc1:
+        condition: service_healthy
+    restart: on-failure:5
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper-dc1:2181
-      KAFKA_LISTENERS: PLAINTEXT://:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1-dc1:9092
-      # Rule of thumb: replication factor ≈ 3, min ISR ≈ 2–3, regardless of having 3, 5, or 7 brokers.
-      # Additional brokers are mainly for load distribution and future replicas/partitions.
+      # Broker identity
+      KAFKA_BROKER_ID: 1                                         # Unique ID for this broker in the cluster
+      # Broker connectivity
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-dc1:2181                # Zookeeper connection string for cluster coordination
+      KAFKA_LISTENERS: PLAINTEXT://:9092                         # Network interfaces (all: 0.0.0.0) and ports (9092) the broker listens on
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1-dc1:9092    # Hostname and port advertised to clients
+      # Topic auto-creation
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: false                     # Disables automatic topic creation on first access to avoid misconfigured topics using broker defaults
+      # Defaults for newly created topics
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3                        # Ensures new topics are replicated across multiple brokers for fault tolerance
+      KAFKA_MIN_INSYNC_REPLICAS: 2                               # Ensures writes are only acknowledged when at least a quorum of replicas is in sync
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false                # Prevents a not fully in sync broker from being elected leader, avoiding potential data loss
+      # Leader rebalancing
+      KAFKA_AUTO_LEADER_REBALANCE_ENABLE: true                   # Automatically rebalance partition leadership among brokers to avoid overload
+      KAFKA_LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS: 60          # Interval to check for leader imbalance across brokers
+      KAFKA_LEADER_IMBALANCE_PER_BROKER_PERCENTAGE: 10           # Threshold (%) of partitions per broker beyond which a rebalance is triggered
+      # Internal __consumer_offsets topic
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_OFFSETS_TOPIC_MIN_ISR: 2
+      # Internal __transaction_state topic
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-      # Kafka leader rebalance
-      KAFKA_AUTO_LEADER_REBALANCE_ENABLE: true
-      KAFKA_LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS: 60
-      KAFKA_LEADER_IMBALANCE_PER_BROKER_PERCENTAGE: 10
+      # Logging configuration
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=DEBUG,state.change.logger=DEBUG"
     healthcheck:
       test: [ "CMD", "bash", "-c", "kafka-broker-api-versions --bootstrap-server kafka1-dc1:9092 > /dev/null 2>&1" ]
       interval: 10s
@@ -74,20 +87,34 @@ services:
     image: confluentinc/cp-kafka:7.8.6
     hostname: kafka2-dc1
     depends_on:
-      - zookeeper-dc1
+      zookeeper-dc1:
+        condition: service_healthy
+    restart: on-failure:5
     environment:
+      # Broker identity
       KAFKA_BROKER_ID: 2
+      # Broker connectivity
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-dc1:2181
       KAFKA_LISTENERS: PLAINTEXT://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2-dc1:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-      # Kafka leader rebalance
+      # Topic auto-creation
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: false
+      # Defaults for newly created topics
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false
+      # Leader rebalancing
       KAFKA_AUTO_LEADER_REBALANCE_ENABLE: true
       KAFKA_LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS: 60
       KAFKA_LEADER_IMBALANCE_PER_BROKER_PERCENTAGE: 10
+      # Internal __consumer_offsets topic
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_OFFSETS_TOPIC_MIN_ISR: 2
+      # Internal __transaction_state topic
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      # Logging configuration
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=DEBUG,state.change.logger=DEBUG"
     healthcheck:
       test: [ "CMD", "bash", "-c", "kafka-broker-api-versions --bootstrap-server kafka2-dc1:9092 > /dev/null 2>&1" ]
       interval: 10s
@@ -104,20 +131,34 @@ services:
     image: confluentinc/cp-kafka:7.8.6
     hostname: kafka3-dc1
     depends_on:
-      - zookeeper-dc1
+      zookeeper-dc1:
+        condition: service_healthy
+    restart: on-failure:5
     environment:
+      # Broker identity
       KAFKA_BROKER_ID: 3
+      # Broker connectivity
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-dc1:2181
       KAFKA_LISTENERS: PLAINTEXT://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3-dc1:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-      # Kafka leader rebalance
+      # Topic auto-creation
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: false
+      # Defaults for newly created topics
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false
+      # Leader rebalancing
       KAFKA_AUTO_LEADER_REBALANCE_ENABLE: true
       KAFKA_LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS: 60
       KAFKA_LEADER_IMBALANCE_PER_BROKER_PERCENTAGE: 10
+      # Internal __consumer_offsets topic
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_OFFSETS_TOPIC_MIN_ISR: 2
+      # Internal __transaction_state topic
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      # Logging configuration
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=DEBUG,state.change.logger=DEBUG"
     healthcheck:
       test: [ "CMD", "bash", "-c", "kafka-broker-api-versions --bootstrap-server kafka3-dc1:9092 > /dev/null 2>&1" ]
       interval: 10s
@@ -142,11 +183,11 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
       ZOOKEEPER_SYNC_LIMIT: 2
     healthcheck:
-      test: [ "CMD-SHELL", "echo srvr | nc localhost 2181 | grep Mode" ]
+      test: [ "CMD-SHELL", "echo 'create -e /healthcheck test' | /usr/bin/zookeeper-shell localhost:2181 >/tmp/zk 2>&1 && grep -q Created /tmp/zk && echo 'delete /healthcheck' | /usr/bin/zookeeper-shell localhost:2181 >/dev/null 2>&1" ]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     volumes:
       - ./data/dc_failover_demo/zookeeper_dc2/data:/var/lib/zookeeper/data
       - ./data/dc_failover_demo/zookeeper_dc2/log:/var/lib/zookeeper/log
@@ -158,20 +199,34 @@ services:
     image: confluentinc/cp-kafka:7.8.6
     hostname: kafka1-dc2
     depends_on:
-      - zookeeper-dc2
+      zookeeper-dc2:
+        condition: service_healthy
+    restart: on-failure:5
     environment:
+      # Broker identity
       KAFKA_BROKER_ID: 4
+      # Broker connectivity
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-dc2:2181
       KAFKA_LISTENERS: PLAINTEXT://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1-dc2:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-      # Kafka leader rebalance
+      # Topic auto-creation
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: false
+      # Defaults for newly created topics
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false
+      # Leader rebalancing
       KAFKA_AUTO_LEADER_REBALANCE_ENABLE: true
       KAFKA_LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS: 60
       KAFKA_LEADER_IMBALANCE_PER_BROKER_PERCENTAGE: 10
+      # Internal __consumer_offsets topic
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_OFFSETS_TOPIC_MIN_ISR: 2
+      # Internal __transaction_state topic
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      # Logging configuration
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=DEBUG,state.change.logger=DEBUG"
     healthcheck:
       test: [ "CMD", "bash", "-c", "kafka-broker-api-versions --bootstrap-server kafka1-dc2:9092 > /dev/null 2>&1" ]
       interval: 10s
@@ -188,20 +243,34 @@ services:
     image: confluentinc/cp-kafka:7.8.6
     hostname: kafka2-dc2
     depends_on:
-      - zookeeper-dc2
+      zookeeper-dc2:
+        condition: service_healthy
+    restart: on-failure:5
     environment:
+      # Broker identity
       KAFKA_BROKER_ID: 5
+      # Broker connectivity
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-dc2:2181
       KAFKA_LISTENERS: PLAINTEXT://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2-dc2:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-      # Kafka leader rebalance
+      # Topic auto-creation
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: false
+      # Defaults for newly created topics
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false
+      # Leader rebalancing
       KAFKA_AUTO_LEADER_REBALANCE_ENABLE: true
       KAFKA_LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS: 60
       KAFKA_LEADER_IMBALANCE_PER_BROKER_PERCENTAGE: 10
+      # Internal __consumer_offsets topic
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_OFFSETS_TOPIC_MIN_ISR: 2
+      # Internal __transaction_state topic
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      # Logging configuration
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=DEBUG,state.change.logger=DEBUG"
     healthcheck:
       test: [ "CMD", "bash", "-c", "kafka-broker-api-versions --bootstrap-server kafka2-dc2:9092 > /dev/null 2>&1" ]
       interval: 10s
@@ -218,20 +287,34 @@ services:
     image: confluentinc/cp-kafka:7.8.6
     hostname: kafka3-dc2
     depends_on:
-      - zookeeper-dc2
+      zookeeper-dc2:
+        condition: service_healthy
+    restart: on-failure:5
     environment:
+      # Broker identity
       KAFKA_BROKER_ID: 6
+      # Broker connectivity
       KAFKA_ZOOKEEPER_CONNECT: zookeeper-dc2:2181
       KAFKA_LISTENERS: PLAINTEXT://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3-dc2:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
-      # Kafka leader rebalance
+      # Topic auto-creation
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: false
+      # Defaults for newly created topics
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: false
+      # Leader rebalancing
       KAFKA_AUTO_LEADER_REBALANCE_ENABLE: true
       KAFKA_LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS: 60
       KAFKA_LEADER_IMBALANCE_PER_BROKER_PERCENTAGE: 10
+      # Internal __consumer_offsets topic
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_OFFSETS_TOPIC_MIN_ISR: 2
+      # Internal __transaction_state topic
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      # Logging configuration
+      KAFKA_LOG4J_LOGGERS: "kafka.controller=DEBUG,state.change.logger=DEBUG"
     healthcheck:
       test: [ "CMD", "bash", "-c", "kafka-broker-api-versions --bootstrap-server kafka3-dc2:9092 > /dev/null 2>&1" ]
       interval: 10s
@@ -248,15 +331,9 @@ services:
   ###  MirrorMaker 2 (single worker for demo)  ###
   ################################################
 
-  mirrormaker-dc1:
+  mirrormaker-dc2:
     image: apache/kafka:4.1.1
     depends_on:
-#      kafka1-dc1: { condition: service_healthy }
-#      kafka2-dc1: { condition: service_healthy }
-#      kafka3-dc1: { condition: service_healthy }
-#      kafka1-dc2: { condition: service_healthy }
-#      kafka2-dc2: { condition: service_healthy }
-#      kafka3-dc2: { condition: service_healthy }
       - kafka1-dc1
       - kafka2-dc1
       - kafka3-dc1
@@ -279,17 +356,11 @@ services:
       /opt/kafka/bin/connect-mirror-maker.sh /opt/mm2.properties
       "
     healthcheck:
-      test: [ "CMD-SHELL", "ps aux | grep -v grep | grep -q ConnectDistributed" ]
+      test: [ "CMD-SHELL", "grep -q 'Kafka MirrorMaker started' /opt/kafka/logs/connect.log" ]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 30s
-#    healthcheck:
-#      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka1-dc1:9092 --list > /dev/null 2>&1" ]
-#      interval: 10s
-#      timeout: 10s
-#      retries: 12
-#      start_period: 30s
     volumes:
       - ./config/mm2.properties:/opt/mm2.properties
     networks: [ dc1, dc2 ]
@@ -303,6 +374,7 @@ services:
     depends_on:
       - kafka1-dc1
       - kafka1-dc2
+    restart: always
     environment:
       AKHQ_CONFIGURATION: |
         akhq:
@@ -317,3 +389,23 @@ services:
       - "8081:8080"
     networks: [ dc1, dc2 ]
 
+  #######################
+  ###  Demo Services  ###
+  #######################
+
+  demo-service:
+    image: udocirkel/kafka-example/demo-service:1.0.0
+    restart: always
+    depends_on:
+      kafka1-dc1:
+        condition: service_started
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka1-dc1:9092,kafka2-dc1:9092,kafka3-dc1:9092
+      APP_TOPIC_NAME: demo-service-topic
+      APP_TOPIC_PARTITIONS: 4
+      APP_TOPIC_REPLICAS: 3
+      APP_TOPIC_MIN_INSYNC_REPLICAS: 2
+      LOG_LEVEL: DEBUG
+    ports:
+      - "8087:8080"
+    networks: [ dc1 ]
